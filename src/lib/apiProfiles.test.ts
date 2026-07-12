@@ -13,9 +13,20 @@ import {
   importCustomProviderSettingsFromJson,
   mergeImportedSettings,
   normalizeSettings,
+  shouldUseImagesApiForAgentBatch,
   switchApiProfileProvider,
   validateApiProfile,
 } from './apiProfiles'
+
+describe('shouldUseImagesApiForAgentBatch', () => {
+  it('uses Images API endpoints for image profiles', () => {
+    expect(shouldUseImagesApiForAgentBatch(createDefaultOpenAIProfile({ apiMode: 'images' }))).toBe(true)
+  })
+
+  it('keeps Responses API for Responses profiles', () => {
+    expect(shouldUseImagesApiForAgentBatch(createDefaultOpenAIProfile({ apiMode: 'responses' }))).toBe(false)
+  })
+})
 
 afterEach(() => {
   vi.unstubAllEnvs()

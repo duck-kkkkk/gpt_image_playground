@@ -17,7 +17,7 @@ import type {
   ResponsesOutputItem,
 } from './types'
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_PARAMS } from './types'
-import { DEFAULT_SETTINGS, getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, getCustomProviderDefinition, mergeImportedSettings, normalizeSettings, validateApiProfile } from './lib/apiProfiles'
+import { DEFAULT_SETTINGS, getActiveApiProfile, getAgentImageApiProfile, getAgentTextApiProfile, getCustomProviderDefinition, mergeImportedSettings, normalizeSettings, shouldUseImagesApiForAgentBatch, validateApiProfile } from './lib/apiProfiles'
 import { dismissAllTooltips } from './lib/tooltipDismiss'
 import { remapImageMentionsForOrder, replaceImageMentionsForApi } from './lib/promptImageMentions'
 import {
@@ -4044,7 +4044,7 @@ async function executeAgentRound(
       }
     }
 
-    const callHybridImageApiSingle = async (opts: {
+    const callConfiguredImageApiSingle = async (opts: {
       taskId: string
       prompt: string
       referenceImageDataUrls: string[]
@@ -4117,7 +4117,7 @@ async function executeAgentRound(
       })
 
       try {
-        const result = await callHybridImageApiSingle({
+        const result = await callConfiguredImageApiSingle({
           taskId,
           prompt: item.prompt,
           referenceImageDataUrls: references.dataUrls,
@@ -4162,12 +4162,13 @@ async function executeAgentRound(
       }
 
       // Create task cards in model-provided order before starting network calls.
+      const useImagesApi = shouldUseImagesApiForAgentBatch(imageProfile)
       const batchExecutionItems = []
       for (const item of batchItems) {
         const referenceIds = uniqueIds(extractAgentReferenceIds(item.prompt))
         const references = await resolveReferenceImages(referenceIds)
         const batchToolCallId = genId()
-        const taskParams = requestSettings.agentApiConfigMode === 'hybrid'
+        const taskParams = useImagesApi
           ? {
               ...normalizeParamsForSettings(params, imageRequestSettings, { hasInputImages: references.dataUrls.length > 0 }),
               n: 1,
@@ -4185,11 +4186,10 @@ async function executeAgentRound(
 
       // Fire all batch items concurrently after all cards are visible.
       const batchPromises = batchExecutionItems.map(async ({ item, batchToolCallId, references, referenceIds, taskParams }) => {
-
-        const batchResult = requestSettings.agentApiConfigMode === 'hybrid'
+        const batchResult = useImagesApi
           ? {
               batchItemId: item.id,
-              ...(await callHybridImageApiSingle({
+              ...(await callConfiguredImageApiSingle({
                 taskId: taskIdByToolCallId.get(batchToolCallId)!,
                 prompt: item.prompt,
                 referenceImageDataUrls: references.dataUrls,

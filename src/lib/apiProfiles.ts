@@ -601,6 +601,10 @@ export function getAgentImageApiProfile(settings: Partial<AppSettings> | unknown
   return normalized.profiles.find((profile) => profile.id === normalized.agentImageProfileId) ?? null
 }
 
+export function shouldUseImagesApiForAgentBatch(profile: ApiProfile): boolean {
+  return profile.apiMode === 'images'
+}
+
 export function getCustomProviderDefinition(settings: Partial<AppSettings> | unknown, provider: ApiProvider): CustomProviderDefinition | null {
   const normalized = normalizeSettings(settings)
   return normalized.customProviders.find((item) => item.id === provider) ?? null

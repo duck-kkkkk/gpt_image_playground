@@ -604,6 +604,41 @@ describe('callImageApi', () => {
     )
   })
 
+  it('uses the image edits proxy path for requests with reference images', async () => {
+    vi.stubEnv('VITE_API_PROXY_AVAILABLE', 'true')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).startsWith('data:')) {
+        return new Response(new Blob(['image'], { type: 'image/png' }))
+      }
+      return new Response(JSON.stringify({
+        data: [{ b64_json: 'aW1hZ2U=' }],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+
+    await callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        apiKey: 'test-key',
+        apiProxy: true,
+        baseUrl: '',
+      },
+      prompt: 'edit prompt',
+      params: { ...DEFAULT_PARAMS, n: 1 },
+      inputImageDataUrls: ['data:image/png;base64,aW1hZ2U='],
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api-proxy/images/edits',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(FormData),
+      }),
+    )
+  })
+
   it('uses the same-origin API proxy path when API proxy is enabled and base URL is empty', async () => {
     vi.stubEnv('VITE_API_PROXY_AVAILABLE', 'true')
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
