@@ -7,6 +7,7 @@ interface GeneralSettingsTabProps {
   commitSettings: (nextDraft: AppSettings) => void
   onOpenZipDownloadRouteManager: () => void
   toggleTaskCompletionNotification: () => Promise<void>
+  managedApi: boolean
 }
 
 export default function GeneralSettingsTab({
@@ -15,6 +16,7 @@ export default function GeneralSettingsTab({
   commitSettings,
   onOpenZipDownloadRouteManager,
   toggleTaskCompletionNotification,
+  managedApi,
 }: GeneralSettingsTabProps) {
   return (
     <div className="space-y-4">
@@ -127,7 +129,7 @@ export default function GeneralSettingsTab({
           关闭后，不再持久化提示词和参考图，下次启动会使用空输入框。
         </div>
       </div>
-      <div className="block">
+      {!managedApi && <div className="block">
         <div className="mb-1 flex items-center justify-between">
           <span className="block text-sm text-gray-600 dark:text-gray-300">复用配置时临时复用该任务的 API 配置</span>
           <button
@@ -144,7 +146,7 @@ export default function GeneralSettingsTab({
         <div data-selectable-text className="text-xs text-gray-500 dark:text-gray-500">
           开启后，复用历史任务时会临时使用该任务的 API 配置，找不到该配置时提交会提示；关闭后，会继续使用当前的 API 配置。
         </div>
-      </div>
+      </div>}
       <div className="block">
         <div className="mb-1 flex items-center justify-between">
           <span className="block text-sm text-gray-600 dark:text-gray-300">成功任务仍然展示重试按钮</span>
