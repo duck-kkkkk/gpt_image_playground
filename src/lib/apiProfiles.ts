@@ -684,7 +684,7 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
     ? record.apiMode
     : profile.apiMode
 
-  return {
+  const activeProfile = {
     ...profile,
     baseUrl: typeof record.baseUrl === 'string' ? record.baseUrl : profile.baseUrl,
     apiKey: typeof record.apiKey === 'string' ? record.apiKey : profile.apiKey,
@@ -696,6 +696,10 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
     streamImages: profile.provider === 'openai' && typeof record.streamImages === 'boolean' ? record.streamImages : profile.streamImages,
     streamPartialImages: normalizeStreamPartialImages(record.streamPartialImages, profile.streamPartialImages),
   }
+  if (isDefaultConfigOnlyEnabled() && (!activeProfile.model.trim() || activeProfile.model.trim() === '{model}')) {
+    return { ...activeProfile, model: DEFAULT_IMAGES_MODEL }
+  }
+  return activeProfile
 }
 
 export function validateApiProfile(profile: ApiProfile): string | null {
