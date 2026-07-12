@@ -6,6 +6,12 @@ on:
   schedule:
     - cron: '29 3 * * *'
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the newly built image to the server
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -66,7 +72,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Configure deployment SSH key
-        if: vars.DEPLOY_ENABLED == 'true'
+        if: vars.DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.deploy == true)
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -79,7 +85,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy to the server
-        if: vars.DEPLOY_ENABLED == 'true'
+        if: vars.DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.deploy == true)
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
