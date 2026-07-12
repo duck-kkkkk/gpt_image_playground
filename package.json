@@ -27,7 +27,7 @@
   },
   "overrides": {
     "mdast-util-gfm-autolink-literal": "2.0.0",
-    "dompurify": "^3.4.7"
+    "dompurify": "3.4.12"
   },
   "devDependencies": {
     "@types/react": "^19.1.2",
