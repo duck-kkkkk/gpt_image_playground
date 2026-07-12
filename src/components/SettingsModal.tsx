@@ -1216,7 +1216,7 @@ export default function SettingsModal() {
                 </svg>
                 习惯配置
               </button>
-              {!defaultConfigOnly && <button
+              <button
                 onClick={() => setActiveTab('agent')}
                 className={`whitespace-nowrap flex-shrink-0 flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-colors ${activeTab === 'agent' ? 'bg-white dark:bg-white/[0.08] shadow-sm text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-white/[0.04]'}`}
               >
@@ -1226,7 +1226,7 @@ export default function SettingsModal() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 14h2M20 14h2M15 13v2M9 13v2" />
                 </svg>
                 Agent 配置
-              </button>}
+              </button>
               <button
                 onClick={() => setActiveTab('data')}
                 className={`whitespace-nowrap flex-shrink-0 flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-colors ${activeTab === 'data' ? 'bg-white dark:bg-white/[0.08] shadow-sm text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-white/[0.04]'}`}
@@ -1262,7 +1262,7 @@ export default function SettingsModal() {
               />
             )}
 
-            {!defaultConfigOnly && activeTab === 'agent' && (
+            {activeTab === 'agent' && (
               <AgentSettingsTab
                 draft={draft}
                 agentMaxToolRoundsInput={agentMaxToolRoundsInput}
