@@ -19,8 +19,10 @@ interface AgentSettingsTabProps {
   agentImageProfileOptions: SelectOption[]
   selectedAgentTextProfile: ApiProfile | null
   selectedAgentImageProfile: ApiProfile | null
+  managedApi: boolean
   setAgentMaxToolRoundsInput: (value: string) => void
   updateAgentApiConfigMode: (mode: AgentApiConfigMode) => void
+  updateManagedAgentTextModel: (value: string) => void
   commitSettings: (nextDraft: AppSettings) => void
   commitAgentMaxToolRounds: () => void
 }
@@ -32,14 +34,38 @@ export default function AgentSettingsTab({
   agentImageProfileOptions,
   selectedAgentTextProfile,
   selectedAgentImageProfile,
+  managedApi,
   setAgentMaxToolRoundsInput,
   updateAgentApiConfigMode,
+  updateManagedAgentTextModel,
   commitSettings,
   commitAgentMaxToolRounds,
 }: AgentSettingsTabProps) {
   return (
     <div className="space-y-4">
-      <div className="block">
+      {managedApi ? (
+        <>
+          <div className="rounded-2xl border border-blue-200/70 bg-blue-50/70 p-4 text-sm dark:border-blue-400/15 dark:bg-blue-500/[0.08]">
+            <div className="font-medium text-blue-800 dark:text-blue-200">本站 NewAPI Agent</div>
+            <div className="mt-1.5 text-xs leading-relaxed text-blue-700/80 dark:text-blue-200/70">
+              已使用当前登录的 NewAPI 账号自动鉴权和扣费，无需填写 API 地址或 Key。文本模型、网络搜索与生图请求均经服务端安全转发；图片继续使用本站默认的 gpt-image-2。
+            </div>
+          </div>
+          <label className="block">
+            <span className="mb-1.5 block text-sm text-gray-600 dark:text-gray-300">文本模型 ID</span>
+            <input
+              value={draft.agentTextModel}
+              onChange={(event) => updateManagedAgentTextModel(event.target.value)}
+              type="text"
+              placeholder="填写 NewAPI 中支持 Responses API 与工具调用的模型 ID"
+              className="w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50"
+            />
+            <div data-selectable-text className="mt-1.5 text-xs leading-relaxed text-gray-500 dark:text-gray-500">
+              模型 ID 可由你自行填写；它必须支持 Responses API、函数调用，网络搜索开启时还应支持 web_search。文本费用按该模型在 NewAPI 中的定价结算。
+            </div>
+          </label>
+        </>
+      ) : <div className="block">
         <div className="mb-1 flex items-center justify-between gap-3">
           <span className="block text-sm text-gray-600 dark:text-gray-300">使用独立的 API 配置</span>
           <div className="w-20 shrink-0">
@@ -59,9 +85,9 @@ export default function AgentSettingsTab({
           <div>原生：使用原生的 Responses API 配置，由模型调用 <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] dark:bg-white/[0.06]">image_generation</code> 工具生成图片。</div>
           <div>混合：使用非原生的混合 API 配置，由文本模型调用自定义工具，请求图像模型生成图像，解决部分服务商/模型不支持 <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] dark:bg-white/[0.06]">image_generation</code> 工具的问题。</div>
         </div>
-      </div>
+      </div>}
 
-      {draft.agentApiConfigMode !== 'off' && (
+      {!managedApi && draft.agentApiConfigMode !== 'off' && (
         <>
           <div className="block">
             <div className="mb-1 flex items-center justify-between gap-3">

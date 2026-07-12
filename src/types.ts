@@ -111,6 +111,7 @@ export interface AppSettings {
   agentWebSearch: boolean
   agentMathFormattingPrompt: boolean
   agentApiConfigMode: AgentApiConfigMode
+  agentTextModel: string
   agentTextProfileId?: string | null
   agentImageProfileId?: string | null
   profiles: ApiProfile[]

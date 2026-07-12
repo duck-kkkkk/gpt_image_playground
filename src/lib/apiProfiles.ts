@@ -34,6 +34,7 @@ export const DEFAULT_RESPONSES_MODEL = 'gpt-5.5'
 export const DEFAULT_FAL_BASE_URL = 'https://fal.run'
 export const DEFAULT_FAL_MODEL = 'openai/gpt-image-2'
 export const DEFAULT_OPENAI_PROFILE_ID = 'default-openai'
+export const MANAGED_AGENT_TEXT_PROFILE_ID = 'managed-agent-text'
 export const DEFAULT_API_TIMEOUT = 600
 
 const BUILT_IN_PROVIDER_IDS = new Set<ApiProvider>(['openai', 'fal'])
@@ -505,6 +506,7 @@ function validateImportedProfileRecord(input: unknown) {
 
 export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSettings {
   const record = input && typeof input === 'object' ? input as Record<string, unknown> : {}
+  const defaultConfigOnly = isDefaultConfigOnlyEnabled()
   const customProviders = normalizeCustomProviderDefinitions(record.customProviders)
   const customProviderIds = new Set(customProviders.map((provider) => provider.id))
   const legacyApiMode: ApiMode = record.apiMode === 'responses' ? 'responses' : 'images'
@@ -527,7 +529,8 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     ? record.activeProfileId
     : profiles[0].id
   const active = profiles.find((p) => p.id === activeProfileId) ?? profiles[0]
-  const agentApiConfigMode = normalizeAgentApiConfigMode(record.agentApiConfigMode)
+  const agentApiConfigMode = defaultConfigOnly ? 'hybrid' : normalizeAgentApiConfigMode(record.agentApiConfigMode)
+  const agentTextModel = typeof record.agentTextModel === 'string' ? record.agentTextModel.trim() : ''
   const firstAgentTextProfile = profiles.find(isAgentTextApiProfile)
   const agentTextProfileId = typeof record.agentTextProfileId === 'string' && profiles.some((p) => p.id === record.agentTextProfileId && isAgentTextApiProfile(p))
     ? record.agentTextProfileId
@@ -562,6 +565,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     agentWebSearch: typeof record.agentWebSearch === 'boolean' ? record.agentWebSearch : false,
     agentMathFormattingPrompt: typeof record.agentMathFormattingPrompt === 'boolean' ? record.agentMathFormattingPrompt : true,
     agentApiConfigMode,
+    agentTextModel,
     agentTextProfileId,
     agentImageProfileId,
     profiles,
@@ -571,12 +575,28 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
 
 export function getAgentTextApiProfile(settings: Partial<AppSettings> | unknown): ApiProfile | null {
   const normalized = normalizeSettings(settings)
+  if (isDefaultConfigOnlyEnabled()) {
+    const model = normalized.agentTextModel.trim()
+    if (!model) return null
+    const active = getActiveApiProfile(normalized)
+    return {
+      ...active,
+      id: MANAGED_AGENT_TEXT_PROFILE_ID,
+      name: '本站 NewAPI Agent',
+      model,
+      apiMode: 'responses',
+      codexCli: false,
+      apiProxy: true,
+      streamImages: false,
+    }
+  }
   if (normalized.agentApiConfigMode === 'off') return getActiveApiProfile(normalized)
   return normalized.profiles.find((profile) => profile.id === normalized.agentTextProfileId) ?? null
 }
 
 export function getAgentImageApiProfile(settings: Partial<AppSettings> | unknown): ApiProfile | null {
   const normalized = normalizeSettings(settings)
+  if (isDefaultConfigOnlyEnabled()) return getActiveApiProfile(normalized)
   if (normalized.agentApiConfigMode !== 'hybrid') return getAgentTextApiProfile(normalized)
   return normalized.profiles.find((profile) => profile.id === normalized.agentImageProfileId) ?? null
 }
@@ -681,7 +701,7 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
 export function validateApiProfile(profile: ApiProfile): string | null {
   if (!profile.name.trim()) return '缺少名称'
   if (profile.provider !== 'fal' && !profile.baseUrl.trim() && !shouldUseApiProxy(profile.apiProxy)) return '缺少 API URL'
-  if (!profile.apiKey.trim()) return '缺少 API Key'
+  if (!isDefaultConfigOnlyEnabled() && !profile.apiKey.trim()) return '缺少 API Key'
   if (!profile.model.trim()) return '缺少模型 ID'
   return null
 }
@@ -870,6 +890,7 @@ export const DEFAULT_SETTINGS: AppSettings = normalizeSettings({
   agentWebSearch: false,
   agentMathFormattingPrompt: true,
   agentApiConfigMode: 'off',
+  agentTextModel: '',
   agentTextProfileId: null,
   agentImageProfileId: null,
 })

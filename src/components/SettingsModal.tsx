@@ -461,7 +461,7 @@ export default function SettingsModal() {
 
   useEffect(() => {
     if (!showSettings || !settingsTabRequest) return
-    setActiveTab(defaultConfigOnly && (settingsTabRequest === 'api' || settingsTabRequest === 'agent') ? 'general' : settingsTabRequest)
+    setActiveTab(defaultConfigOnly && settingsTabRequest === 'api' ? 'general' : settingsTabRequest)
   }, [defaultConfigOnly, settingsTabRequest, showSettings])
 
   const updateProfileMenuMaxHeight = useCallback(() => {
@@ -1270,8 +1270,10 @@ export default function SettingsModal() {
                 agentImageProfileOptions={agentImageProfileOptions}
                 selectedAgentTextProfile={selectedAgentTextProfile}
                 selectedAgentImageProfile={selectedAgentImageProfile}
+                managedApi={defaultConfigOnly}
                 setAgentMaxToolRoundsInput={setAgentMaxToolRoundsInput}
                 updateAgentApiConfigMode={updateAgentApiConfigMode}
+                updateManagedAgentTextModel={(agentTextModel) => commitSettings({ ...draft, agentTextModel, agentApiConfigMode: 'hybrid' })}
                 commitSettings={commitSettings}
                 commitAgentMaxToolRounds={commitAgentMaxToolRounds}
               />

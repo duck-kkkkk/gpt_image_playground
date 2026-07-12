@@ -20,6 +20,12 @@ export default function GeneralSettingsTab({
 }: GeneralSettingsTabProps) {
   return (
     <div className="space-y-4">
+      {managedApi && <div className="rounded-2xl border border-blue-200/70 bg-blue-50/70 p-4 text-sm dark:border-blue-400/15 dark:bg-blue-500/[0.08]">
+        <div className="font-medium text-blue-800 dark:text-blue-200">本站默认接入 NewAPI</div>
+        <div className="mt-1.5 text-xs leading-relaxed text-blue-700/80 dark:text-blue-200/70">
+          图片接口、上游地址与鉴权由服务端安全处理。浏览器不会接收或保存 API Key，用户无需配置 API URL、服务商或兼容参数。生成费用将按当前登录的 NewAPI 账号及站点定价结算。
+        </div>
+      </div>}
       <div className="hidden sm:block">
         <div className="mb-1 flex items-center justify-between">
           <span className="block text-sm text-gray-600 dark:text-gray-300">任务提交方式</span>
