@@ -421,6 +421,11 @@ export interface FalApiResponse {
 export interface ExportData {
   version: number
   exportedAt: string
+  backupPart?: {
+    id: string
+    index: number
+    total: number
+  }
   settings?: AppSettings
   tasks?: TaskRecord[]
   favoriteCollections?: FavoriteCollection[]
