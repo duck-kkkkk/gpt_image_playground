@@ -1,6 +1,7 @@
 import { DEFAULT_STREAM_PARTIAL_IMAGES, type ApiProfile, type CustomProviderDefinition, type CustomProviderPollMapping, type CustomProviderResultMapping, type CustomProviderSubmitMapping, type ImageApiResponse, type ImageResponseItem, type ResponsesApiResponse, type ResponsesOutputItem, type TaskParams } from '../types'
 import { dataUrlToBlob, imageDataUrlToPngBlob, maskDataUrlToPngBlob } from './canvasImage'
 import { buildApiUrl, readClientDevProxyConfig, shouldUseApiProxy } from './devProxy'
+import { isManagedCustomApiProfile } from './apiProfiles'
 import {
   assertImageInputPayloadSize,
   assertMaskEditFileSize,
@@ -558,7 +559,7 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile): P
   const isEdit = inputImageDataUrls.length > 0
   const mime = MIME_MAP[params.output_format] || 'image/png'
   const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig, !isManagedCustomApiProfile(profile))
   const requestHeaders = createRequestHeaders(profile)
   const paths = createOpenAICompatiblePaths()
 
@@ -956,7 +957,7 @@ async function callCustomHttpImageApi(opts: CallApiOptions, profile: ApiProfile,
 
   try {
     const proxyConfig = readClientDevProxyConfig()
-    const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig, !isManagedCustomApiProfile(profile))
     const submitMapping = isEdit && customProvider.editSubmit ? customProvider.editSubmit : customProvider.submit
     if (useApiProxy && (submitMapping.method ?? 'POST') !== 'POST') {
       throw new Error('API 代理暂不支持使用 GET 提交的自定义服务商。请关闭 API 代理，或改用 POST 提交的自定义服务商配置。')
@@ -1039,7 +1040,7 @@ async function callResponsesImageApiSingle(opts: CallApiOptions, profile: ApiPro
   const { prompt, params, inputImageDataUrls } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
   const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+    const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig, !isManagedCustomApiProfile(profile))
   const requestHeaders = createRequestHeaders(profile)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)

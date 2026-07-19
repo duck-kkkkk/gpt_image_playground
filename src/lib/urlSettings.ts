@@ -3,6 +3,7 @@ import { normalizeBaseUrl } from './devProxy'
 import {
   createDefaultOpenAIProfile,
   DEFAULT_IMAGES_MODEL,
+  DEFAULT_OPENAI_PROFILE_ID,
   DEFAULT_RESPONSES_MODEL,
   findEquivalentApiProfile,
   isDefaultConfigOnlyEnabled,
@@ -77,8 +78,8 @@ export function activateFirstImportedProfile(settings: AppSettings, importedSett
 }
 
 /**
- * 仅展示默认配置模式：从 URL 参数中提取可覆盖的字段，patch 到当前活跃配置上。
- * 不新建配置、不导入自定义服务商、不切换 provider。
+ * 托管模式：本站默认配置不可覆盖；URL 中的 OpenAI 兼容配置会保存为独立自定义配置。
+ * 不导入自定义服务商，也不把第三方 Key 写入本站默认配置。
  */
 function buildDefaultConfigOnlySettingsFromUrlParams(currentSettings: Partial<AppSettings> | unknown, searchParams: URLSearchParams): Partial<AppSettings> {
   const settings = normalizeSettings(currentSettings)
@@ -137,6 +138,24 @@ function buildDefaultConfigOnlySettingsFromUrlParams(currentSettings: Partial<Ap
   }
 
   if (Object.keys(patch).length === 0) return {}
+
+  if (activeProfile.id === DEFAULT_OPENAI_PROFILE_ID) {
+    const profile = createDefaultOpenAIProfile({
+      ...activeProfile,
+      ...patch,
+      id: createUrlProfileId(new Set(settings.profiles.map((item) => item.id))),
+      name: patch.name || 'URL 参数配置',
+      provider: 'openai',
+      baseUrl: patch.baseUrl ?? '',
+      apiKey: patch.apiKey ?? '',
+      apiProxy: false,
+    })
+    return normalizeSettings({
+      ...settings,
+      profiles: [...settings.profiles, profile],
+      activeProfileId: profile.id,
+    })
+  }
 
   return normalizeSettings({
     ...settings,

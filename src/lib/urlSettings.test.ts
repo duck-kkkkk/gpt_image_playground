@@ -355,7 +355,7 @@ describe('URL settings params', () => {
     })
   })
 
-  it('patches the active profile instead of creating a new one when only default config is shown', async () => {
+  it('creates a custom profile without changing the site default in managed mode', async () => {
     const { buildSettingsFromUrlParams } = await importDefaultConfigOnlyUrlSettings()
     const current = normalizeSettings(DEFAULT_SETTINGS)
     const next = normalizeSettings({
@@ -363,17 +363,26 @@ describe('URL settings params', () => {
       ...buildSettingsFromUrlParams(current, new URLSearchParams('apiUrl=https://api.example.com/v1&apiKey=test-key&model=custom-model&profileName=导入配置&apiMode=responses')),
     })
 
-    expect(next.profiles).toHaveLength(1)
+    expect(next.profiles).toHaveLength(2)
     expect(next.customProviders).toHaveLength(0)
-    expect(next.activeProfileId).toBe(current.activeProfileId)
+    expect(next.activeProfileId).not.toBe(current.activeProfileId)
     expect(next.profiles[0]).toMatchObject({
       id: current.activeProfileId,
+      provider: 'openai',
+      name: '本站默认',
+      baseUrl: 'https://default.example.com/v1',
+      apiKey: '',
+      model: DEFAULT_IMAGES_MODEL,
+      apiMode: 'images',
+    })
+    expect(next.profiles.find((profile) => profile.id === next.activeProfileId)).toMatchObject({
       provider: 'openai',
       name: '导入配置',
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       model: 'custom-model',
       apiMode: 'responses',
+      apiProxy: false,
     })
   })
 
@@ -424,7 +433,7 @@ describe('URL settings params', () => {
     })
   })
 
-  it('patches from a matching imported profile without importing custom providers when only default config is shown', async () => {
+  it('creates a custom profile from a matching imported profile in managed mode', async () => {
     const { buildSettingsFromUrlParams } = await importDefaultConfigOnlyUrlSettings()
     const importedSettings = {
       customProviders: [{
@@ -471,11 +480,16 @@ describe('URL settings params', () => {
       ...buildSettingsFromUrlParams(current, params),
     })
 
-    expect(next.profiles).toHaveLength(1)
+    expect(next.profiles).toHaveLength(2)
     expect(next.customProviders).toHaveLength(0)
-    expect(next.activeProfileId).toBe(current.activeProfileId)
+    expect(next.activeProfileId).not.toBe(current.activeProfileId)
     expect(next.profiles[0]).toMatchObject({
       id: current.activeProfileId,
+      provider: 'openai',
+      name: '本站默认',
+      apiKey: '',
+    })
+    expect(next.profiles.find((profile) => profile.id === next.activeProfileId)).toMatchObject({
       provider: 'openai',
       name: 'OpenAI Profile',
       baseUrl: 'https://openai.example.com/v1',
@@ -484,7 +498,7 @@ describe('URL settings params', () => {
       timeout: 120,
       apiMode: 'responses',
       codexCli: true,
-      apiProxy: true,
+      apiProxy: false,
     })
   })
 
@@ -553,9 +567,9 @@ describe('URL settings params', () => {
 
     expect(next.customProviders).toHaveLength(1)
     expect(next.customProviders[0].id).toBe(customProvider.id)
-    expect(next.profiles).toHaveLength(1)
+    expect(next.profiles).toHaveLength(2)
     expect(next.activeProfileId).toBe(current.activeProfileId)
-    expect(next.profiles[0]).toMatchObject({
+    expect(next.profiles.find((profile) => profile.id === current.activeProfileId)).toMatchObject({
       id: current.activeProfileId,
       provider: customProvider.id,
       name: 'Patched Custom Default',

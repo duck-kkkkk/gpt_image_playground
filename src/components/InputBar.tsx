@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } fr
 import { createPortal } from 'react-dom'
 import { ALL_FAVORITES_COLLECTION_ID, deleteFavoriteCollection, getTaskFavoriteCollectionIds, useStore, submitTask, submitAgentMessage, stopAgentResponse, addImageFromFile, createInputImageFromFile, deleteImageIfUnreferenced, removeMultipleTasks, getCachedImage, ensureImageCached, getActiveAgentRounds, taskMatchesFilterStatus, taskMatchesSearchQuery } from '../store'
 import { DEFAULT_PARAMS, type TaskRecord } from '../types'
-import { getActiveApiProfile, getAgentImageApiProfile, isDefaultConfigOnlyEnabled, normalizeSettings } from '../lib/apiProfiles'
+import { getActiveApiProfile, getAgentImageApiProfile, isDefaultConfigOnlyEnabled, normalizeSettings, validateApiProfile } from '../lib/apiProfiles'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { getAtImageQuery, getImageMentionLabel, getPromptIndexFromVisibleIndex, getPromptMentionParts, getSelectedImageMentionLabel, getSelectedTextMentionLabel, imageMentionMatches, insertImageMentionAtVisibleRange, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, stripImageMentionMarkers } from '../lib/promptImageMentions'
 import { normalizeImageSize } from '../lib/size'
@@ -739,7 +739,9 @@ export default function InputBar() {
   const isManagedApiConfig = isDefaultConfigOnlyEnabled()
   const needsAgentTextModel = isManagedApiConfig && appMode === 'agent'
   const hasSubmitApiConfig = isManagedApiConfig
-    ? !needsAgentTextModel || Boolean(settings.agentTextModel.trim())
+    ? needsAgentTextModel
+      ? Boolean(settings.agentTextModel.trim())
+      : validateApiProfile(activeProfile) === null
     : Boolean(activeProfile.apiKey)
   const canSubmit = Boolean(prompt.trim() && hasSubmitApiConfig && !activeAgentIsRunning)
   const submitButtonAriaLabel = activeAgentIsRunning

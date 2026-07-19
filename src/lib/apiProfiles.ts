@@ -82,6 +82,14 @@ export function isDefaultConfigOnlyEnabled(): boolean {
   return SHOW_DEFAULT_CONFIG_ONLY && (Boolean(RAW_DEFAULT_API_URL) || DEFAULT_OPENAI_API_PROXY)
 }
 
+export function isManagedDefaultApiProfile(profile: ApiProfile): boolean {
+  return isDefaultConfigOnlyEnabled() && profile.id === DEFAULT_OPENAI_PROFILE_ID
+}
+
+export function isManagedCustomApiProfile(profile: ApiProfile): boolean {
+  return isDefaultConfigOnlyEnabled() && profile.id !== DEFAULT_OPENAI_PROFILE_ID
+}
+
 function normalizeReferenceImageEditAction(value: unknown): ReferenceImageEditAction {
   return value === 'replace-reference' || value === 'add-mask' ? value : 'ask'
 }
@@ -522,9 +530,28 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     streamImages: typeof record.streamImages === 'boolean' ? record.streamImages : undefined,
     streamPartialImages: normalizeStreamPartialImages(record.streamPartialImages),
   })
-  const profiles = Array.isArray(record.profiles) && record.profiles.length
+  const rawProfiles = Array.isArray(record.profiles) && record.profiles.length
     ? record.profiles.map((profile) => normalizeApiProfile(profile, undefined, customProviderIds))
     : [legacyProfile]
+  const profiles = defaultConfigOnly
+    ? [
+        {
+          ...(rawProfiles.find((profile) => profile.id === DEFAULT_OPENAI_PROFILE_ID) ?? createDefaultOpenAIProfile()),
+          id: DEFAULT_OPENAI_PROFILE_ID,
+          name: '本站默认',
+          provider: 'openai' as const,
+          baseUrl: DEFAULT_BASE_URL,
+          apiKey: '',
+          model: DEFAULT_IMAGES_MODEL,
+          apiMode: 'images' as const,
+          apiProxy: true,
+          codexCli: false,
+        },
+        ...rawProfiles
+          .filter((profile) => profile.id !== DEFAULT_OPENAI_PROFILE_ID)
+          .map((profile) => ({ ...profile, apiProxy: false })),
+      ]
+    : rawProfiles
   const activeProfileId = typeof record.activeProfileId === 'string' && profiles.some((p) => p.id === record.activeProfileId)
     ? record.activeProfileId
     : profiles[0].id
@@ -578,11 +605,14 @@ export function getAgentTextApiProfile(settings: Partial<AppSettings> | unknown)
   if (isDefaultConfigOnlyEnabled()) {
     const model = normalized.agentTextModel.trim()
     if (!model) return null
-    const active = getActiveApiProfile(normalized)
+    const active = normalized.profiles.find((profile) => profile.id === DEFAULT_OPENAI_PROFILE_ID)
+      ?? createDefaultOpenAIProfile()
     return {
       ...active,
       id: MANAGED_AGENT_TEXT_PROFILE_ID,
       name: '本站 NewAPI Agent',
+      baseUrl: '',
+      apiKey: '',
       model,
       apiMode: 'responses',
       codexCli: false,
@@ -596,7 +626,10 @@ export function getAgentTextApiProfile(settings: Partial<AppSettings> | unknown)
 
 export function getAgentImageApiProfile(settings: Partial<AppSettings> | unknown): ApiProfile | null {
   const normalized = normalizeSettings(settings)
-  if (isDefaultConfigOnlyEnabled()) return getActiveApiProfile(normalized)
+  if (isDefaultConfigOnlyEnabled()) {
+    return normalized.profiles.find((profile) => profile.id === DEFAULT_OPENAI_PROFILE_ID)
+      ?? createDefaultOpenAIProfile()
+  }
   if (normalized.agentApiConfigMode !== 'hybrid') return getAgentTextApiProfile(normalized)
   return normalized.profiles.find((profile) => profile.id === normalized.agentImageProfileId) ?? null
 }
@@ -684,21 +717,24 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
   const record = settings && typeof settings === 'object' ? settings as Record<string, unknown> : {}
   const normalized = normalizeSettings(settings)
   const profile = normalized.profiles.find((p) => p.id === normalized.activeProfileId) ?? normalized.profiles[0] ?? createDefaultOpenAIProfile()
-  const apiMode = profile.provider === 'openai' && (record.apiMode === 'images' || record.apiMode === 'responses')
+  const allowLegacyOverrides = !isDefaultConfigOnlyEnabled()
+  const apiMode = allowLegacyOverrides && profile.provider === 'openai' && (record.apiMode === 'images' || record.apiMode === 'responses')
     ? record.apiMode
     : profile.apiMode
 
   const activeProfile = {
     ...profile,
-    baseUrl: typeof record.baseUrl === 'string' ? record.baseUrl : profile.baseUrl,
-    apiKey: typeof record.apiKey === 'string' ? record.apiKey : profile.apiKey,
-    model: typeof record.model === 'string' && record.model.trim() ? record.model : profile.model,
-    timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : profile.timeout,
+    baseUrl: allowLegacyOverrides && typeof record.baseUrl === 'string' ? record.baseUrl : profile.baseUrl,
+    apiKey: allowLegacyOverrides && typeof record.apiKey === 'string' ? record.apiKey : profile.apiKey,
+    model: allowLegacyOverrides && typeof record.model === 'string' && record.model.trim() ? record.model : profile.model,
+    timeout: allowLegacyOverrides && typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : profile.timeout,
     apiMode,
-    codexCli: typeof record.codexCli === 'boolean' ? record.codexCli : profile.codexCli,
-    apiProxy: typeof record.apiProxy === 'boolean' ? record.apiProxy : profile.apiProxy,
-    streamImages: profile.provider === 'openai' && typeof record.streamImages === 'boolean' ? record.streamImages : profile.streamImages,
-    streamPartialImages: normalizeStreamPartialImages(record.streamPartialImages, profile.streamPartialImages),
+    codexCli: allowLegacyOverrides && typeof record.codexCli === 'boolean' ? record.codexCli : profile.codexCli,
+    apiProxy: allowLegacyOverrides && typeof record.apiProxy === 'boolean' ? record.apiProxy : profile.apiProxy,
+    streamImages: allowLegacyOverrides && profile.provider === 'openai' && typeof record.streamImages === 'boolean' ? record.streamImages : profile.streamImages,
+    streamPartialImages: allowLegacyOverrides
+      ? normalizeStreamPartialImages(record.streamPartialImages, profile.streamPartialImages)
+      : profile.streamPartialImages,
   }
   if (isDefaultConfigOnlyEnabled() && (!activeProfile.model.trim() || activeProfile.model.trim() === '{model}')) {
     return { ...activeProfile, model: DEFAULT_IMAGES_MODEL }
@@ -708,8 +744,9 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
 
 export function validateApiProfile(profile: ApiProfile): string | null {
   if (!profile.name.trim()) return '缺少名称'
-  if (profile.provider !== 'fal' && !profile.baseUrl.trim() && !shouldUseApiProxy(profile.apiProxy)) return '缺少 API URL'
-  if (!isDefaultConfigOnlyEnabled() && !profile.apiKey.trim()) return '缺少 API Key'
+  const respectProxyLock = !isManagedCustomApiProfile(profile)
+  if (profile.provider !== 'fal' && !profile.baseUrl.trim() && !shouldUseApiProxy(profile.apiProxy, undefined, respectProxyLock)) return '缺少 API URL'
+  if (!isManagedDefaultApiProfile(profile) && !profile.apiKey.trim()) return '缺少 API Key'
   if (!profile.model.trim()) return '缺少模型 ID'
   return null
 }

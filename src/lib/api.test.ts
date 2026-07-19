@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_PARAMS } from '../types'
+import { DEFAULT_PARAMS, type AppSettings } from '../types'
 import { DEFAULT_SETTINGS } from './apiProfiles'
 import { callImageApi } from './api'
 
@@ -791,6 +791,62 @@ describe('callImageApi', () => {
       '/api-proxy/images/generations',
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('directly calls a managed custom profile even when the deployment proxy is locked', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_SHOW_DEFAULT_CONFIG_ONLY', 'true')
+    vi.stubEnv('VITE_DEFAULT_API_URL', 'https://site.example/v1')
+    vi.stubEnv('VITE_API_PROXY_AVAILABLE', 'true')
+    vi.stubEnv('VITE_API_PROXY_LOCKED', 'true')
+
+    const {
+      DEFAULT_SETTINGS: managedDefaultSettings,
+      getActiveApiProfile: getManagedActiveProfile,
+    } = await import('./apiProfiles')
+    const { callImageApi: callManagedImageApi } = await import('./api')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      data: [{ b64_json: 'aW1hZ2U=' }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    const settings: AppSettings = {
+      ...managedDefaultSettings,
+      profiles: [{
+          id: 'custom-openai',
+          name: 'Other provider',
+          provider: 'openai',
+          baseUrl: 'https://other.example/v1',
+          apiKey: 'other-key',
+          model: 'other-image-model',
+          timeout: 300,
+          apiMode: 'images',
+          codexCli: false,
+          apiProxy: false,
+      }],
+      activeProfileId: 'custom-openai',
+    }
+    expect(getManagedActiveProfile(settings)).toMatchObject({
+      id: 'custom-openai',
+      apiKey: 'other-key',
+      apiProxy: false,
+    })
+
+    await callManagedImageApi({
+      settings,
+      prompt: 'prompt',
+      params: { ...DEFAULT_PARAMS },
+      inputImageDataUrls: [],
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://other.example/v1/images/generations',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const [, init] = fetchMock.mock.calls[0]
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer other-key' })
   })
 
   it('does not add cache request headers that require extra CORS allow-list entries', async () => {

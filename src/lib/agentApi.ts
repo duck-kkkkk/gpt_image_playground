@@ -1,5 +1,6 @@
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_STREAM_PARTIAL_IMAGES, type ApiProfile, type AppSettings, type ResponsesApiResponse, type ResponsesOutputItem, type TaskParams } from '../types'
 import { buildApiUrl, readClientDevProxyConfig, shouldUseApiProxy } from './devProxy'
+import { isManagedCustomApiProfile } from './apiProfiles'
 import { appendStreamingFormatHint, maybeAppendStreamingHint, getApiErrorMessage, MIME_MAP, normalizeBase64Image, pickActualParams } from './imageApiShared'
 
 export interface AgentApiResultImage {
@@ -704,7 +705,7 @@ export async function callAgentResponsesApi(opts: {
   const { settings, profile, params, input, maskDataUrl, signal, onTextDelta, onOutputItems, onImageToolStarted, onImagePartialImage, onImageToolCompleted, onImageToolFailed } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
   const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig, !isManagedCustomApiProfile(profile))
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
   const abortFromCaller = () => controller.abort()
@@ -763,7 +764,7 @@ export async function callAgentConversationTitleApi(opts: {
 }): Promise<string> {
   const { settings, profile, prompt, imageDataUrls, signal } = opts
   const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig, !isManagedCustomApiProfile(profile))
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
   const abortFromCaller = () => controller.abort()
@@ -838,7 +839,7 @@ export async function callBatchImageSingle(opts: {
   const { profile, params, batchItemId, prompt, referenceImageDataUrls, referenceIds, allowPromptRewrite, signal, onImageToolStarted, onPartialImage, onImageToolCompleted } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
   const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig, !isManagedCustomApiProfile(profile))
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
   const abortFromCaller = () => controller.abort()

@@ -17,6 +17,7 @@ import {
   getActiveApiProfile,
   importCustomProviderSettingsFromJson,
   isDefaultConfigOnlyEnabled,
+  isManagedDefaultApiProfile,
   isAgentTextApiProfile,
   isOpenAICompatibleProvider,
   mergeImportedSettings,
@@ -370,7 +371,10 @@ export default function SettingsModal() {
   const activeCustomProvider = draft.customProviders.find((provider) => provider.id === activeProfile.provider)
   const activeProfileApiProxyEligible = isProfileApiProxyEligible(draft, activeProfile)
   const activeCustomProviderAsync = isAsyncCustomProvider(activeCustomProvider)
-  const apiProxyChecked = activeProfileApiProxyEligible && (apiProxyLocked || activeProfile.apiProxy)
+  const managedDefaultProfile = isManagedDefaultApiProfile(activeProfile)
+  const apiProxyChecked = activeProfileApiProxyEligible && (defaultConfigOnly
+    ? managedDefaultProfile
+    : (apiProxyLocked || activeProfile.apiProxy))
   const apiProxyEnabled = apiProxyAvailable && activeProfileApiProxyEligible && apiProxyChecked
   const defaultProviderOrder = ['openai', 'fal', ...draft.customProviders.map(p => p.id)]
   const providerOrder = draft.providerOrder || defaultProviderOrder
@@ -448,8 +452,10 @@ export default function SettingsModal() {
       ...displaySettings,
       profiles: displaySettings.profiles.map((profile) => ({
         ...profile,
-        apiProxy: isProfileApiProxyEligible(displaySettings, profile) && apiProxyAvailable
-          ? (apiProxyLocked || profile.apiProxy)
+          apiProxy: isProfileApiProxyEligible(displaySettings, profile) && apiProxyAvailable
+          ? defaultConfigOnly
+            ? isManagedDefaultApiProfile(profile)
+            : (apiProxyLocked || profile.apiProxy)
           : false,
       })),
     })
@@ -464,7 +470,7 @@ export default function SettingsModal() {
 
   useEffect(() => {
     if (!showSettings || !settingsTabRequest) return
-    setActiveTab(defaultConfigOnly && settingsTabRequest === 'api' ? 'general' : settingsTabRequest)
+    setActiveTab(settingsTabRequest)
   }, [defaultConfigOnly, settingsTabRequest, showSettings])
 
   const updateProfileMenuMaxHeight = useCallback(() => {
@@ -545,7 +551,11 @@ export default function SettingsModal() {
 
   const commitSettings = (nextDraft: AppSettings) => {
     const normalizedProfiles = nextDraft.profiles.map((profile) => {
-      const nextApiProxy = isProfileApiProxyEligible(nextDraft, profile) && apiProxyAvailable ? (apiProxyLocked || profile.apiProxy) : false
+      const nextApiProxy = isProfileApiProxyEligible(nextDraft, profile) && apiProxyAvailable
+        ? defaultConfigOnly
+          ? isManagedDefaultApiProfile(profile)
+          : (apiProxyLocked || profile.apiProxy)
+        : false
       const shouldKeepEmptyBaseUrl = profile.provider !== 'fal' && nextApiProxy && !profile.baseUrl.trim()
       const normalizedBaseUrl = profile.provider === 'fal'
         ? profile.baseUrl.trim().replace(/\/+$/, '') || DEFAULT_FAL_BASE_URL
@@ -837,9 +847,14 @@ export default function SettingsModal() {
   }
 
   const createNewProfile = () => {
-    if (defaultConfigOnly) return
     setReusedTaskApiProfile(null)
-    const profile = createDefaultOpenAIProfile({ id: newId('openai'), name: '新配置' })
+    const profile = createDefaultOpenAIProfile({
+      id: newId('openai'),
+      name: defaultConfigOnly ? '自定义 API' : '新配置',
+      apiKey: '',
+      apiProxy: false,
+      ...(defaultConfigOnly ? { baseUrl: '' } : {}),
+    })
     const nextDraft = normalizeSettings({ 
         ...draft, 
         profiles: [...draft.profiles, profile],
@@ -859,7 +874,7 @@ export default function SettingsModal() {
   }
 
   const duplicateActiveProfile = () => {
-    if (defaultConfigOnly) return
+    if (managedDefaultProfile) return
     setReusedTaskApiProfile(null)
     setDuplicateProfileTooltipVisible(false)
     const profile: ApiProfile = {
@@ -877,7 +892,6 @@ export default function SettingsModal() {
   }
 
   const switchProfile = (id: string) => {
-    if (defaultConfigOnly) return
     setReusedTaskApiProfile(null)
     const nextDraft = normalizeSettings({ ...draft, activeProfileId: id })
     commitSettings(nextDraft)
@@ -1254,15 +1268,15 @@ export default function SettingsModal() {
           {/* Sidebar */}
           <div className="w-full sm:w-48 shrink-0 flex flex-col border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-white/[0.08] bg-gray-50/50 dark:bg-white/[0.02]">
             <nav className="flex-1 overflow-x-auto sm:overflow-y-auto custom-scrollbar p-3 space-x-1 sm:space-x-0 sm:space-y-1 flex sm:flex-col">
-              {!defaultConfigOnly && <button
+              <button
                 onClick={() => setActiveTab('api')}
                 className={`whitespace-nowrap flex-shrink-0 flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-colors ${activeTab === 'api' ? 'bg-white dark:bg-white/[0.08] shadow-sm text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-white/[0.04]'}`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
-                API 配置
-              </button>}
+                {defaultConfigOnly ? 'API 来源' : 'API 配置'}
+              </button>
               <button
                 onClick={() => setActiveTab('general')}
                 className={`whitespace-nowrap flex-shrink-0 flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-colors ${activeTab === 'general' ? 'bg-white dark:bg-white/[0.08] shadow-sm text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-white/[0.04]'}`}
@@ -1335,8 +1349,18 @@ export default function SettingsModal() {
               />
             )}
             
-            {!defaultConfigOnly && activeTab === 'api' && (
+            {activeTab === 'api' && (
               <div className="space-y-4">
+                {defaultConfigOnly && (
+                  <div className={`rounded-xl border p-4 text-sm ${managedDefaultProfile ? 'border-blue-200/70 bg-blue-50/70 text-blue-800 dark:border-blue-400/15 dark:bg-blue-500/[0.08] dark:text-blue-200' : 'border-amber-200/80 bg-amber-50/70 text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/[0.08] dark:text-amber-100'}`}>
+                    <div className="font-medium">{managedDefaultProfile ? '本站默认连接' : '自定义第三方连接'}</div>
+                    <div className="mt-1.5 text-xs leading-relaxed opacity-80">
+                      {managedDefaultProfile
+                        ? '使用当前登录的 NewAPI 账号自动鉴权和计费，浏览器不会接收或保存本站 API Key。需要使用其他服务时，可从下方配置菜单创建“自定义 API”。'
+                        : 'API URL、Key 与模型只保存在当前浏览器，并由浏览器直接请求第三方，不经过本站 Bridge，也不会从本站余额扣费。第三方接口必须允许浏览器跨域访问。'}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <div className="mb-1.5 flex items-center gap-1.5">
                     <span className="block text-sm text-gray-600 dark:text-gray-300">当前配置</span>
@@ -1366,7 +1390,7 @@ export default function SettingsModal() {
                         复制导入 URL
                       </ViewportTooltip>
                     </span>
-                    {!defaultConfigOnly && <span className="relative inline-flex">
+                    {!managedDefaultProfile && <span className="relative inline-flex">
                       <button
                         type="button"
                         onClick={duplicateActiveProfile}
@@ -1398,12 +1422,10 @@ export default function SettingsModal() {
                       ref={profileMenuTriggerRef}
                       type="button"
                       onClick={() => {
-                        if (defaultConfigOnly) return
                         if (!showProfileMenu) updateProfileMenuMaxHeight()
                         setShowProfileMenu(!showProfileMenu)
                       }}
-                      disabled={defaultConfigOnly}
-                      className={`flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2 text-sm text-gray-700 outline-none transition dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 ${defaultConfigOnly ? 'cursor-not-allowed opacity-70' : 'hover:bg-gray-50 dark:hover:bg-white/[0.06]'}`}
+                      className="flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2 text-sm text-gray-700 outline-none transition hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/[0.06]"
                       title={activeProfile.name}
                     >
                       <span className="flex min-w-0 items-center gap-2">
@@ -1415,7 +1437,7 @@ export default function SettingsModal() {
                       <ChevronDownIcon className={`w-3.5 h-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
                     </button>
                     
-                    {showProfileMenu && !defaultConfigOnly && (
+                    {showProfileMenu && (
                       <>
                         <div
                           className="absolute right-0 top-full z-50 mt-1.5 w-full overflow-hidden overflow-y-auto rounded-xl border border-gray-200/60 bg-white/95 py-1 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-black/5 backdrop-blur-xl animate-dropdown-down dark:border-white/[0.08] dark:bg-gray-900/95 dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] dark:ring-white/10 custom-scrollbar"
@@ -1492,7 +1514,7 @@ export default function SettingsModal() {
                                   >
                                     <LinkIcon className="h-3.5 w-3.5" />
                                   </button>
-                                  {draft.profiles.length > 1 && (
+                                  {draft.profiles.length > 1 && profile.id !== DEFAULT_OPENAI_PROFILE_ID && (
                                     <button
                                       type="button"
                                       onClick={(e) => {
@@ -1519,6 +1541,8 @@ export default function SettingsModal() {
                     )}
                   </div>
                 </div>
+
+              <fieldset disabled={managedDefaultProfile} className={`space-y-4 ${managedDefaultProfile ? 'opacity-55' : ''}`}>
 
               {/* 1. 配置名称 */}
               <label className="block">
@@ -1573,7 +1597,7 @@ export default function SettingsModal() {
               )}
 
               {/* 4. API 代理（紧跟 URL） */}
-              {apiProxyAvailable && activeProviderIsOpenAICompatible && !activeCustomProviderAsync && (
+              {(!defaultConfigOnly || managedDefaultProfile) && apiProxyAvailable && activeProviderIsOpenAICompatible && !activeCustomProviderAsync && (
                 <div className="block">
                   <div className="mb-1.5 flex items-center justify-between">
                     <span className="block text-sm text-gray-600 dark:text-gray-300">API 代理</span>
@@ -1795,6 +1819,7 @@ export default function SettingsModal() {
                   />
                 </label>
               )}
+              </fieldset>
             </div>
             )}
             

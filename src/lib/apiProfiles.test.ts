@@ -52,6 +52,112 @@ describe('validateApiProfile', () => {
   })
 })
 
+describe('managed API profiles', () => {
+  it('keeps the site profile managed while allowing a complete custom profile', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_SHOW_DEFAULT_CONFIG_ONLY', 'true')
+    vi.stubEnv('VITE_DEFAULT_API_URL', 'https://site.example/v1')
+    vi.stubEnv('VITE_API_PROXY_AVAILABLE', 'true')
+
+    const {
+      DEFAULT_OPENAI_PROFILE_ID: defaultProfileId,
+      normalizeSettings: normalizeManagedSettings,
+      validateApiProfile: validateManagedProfile,
+    } = await import('./apiProfiles')
+    const settings = normalizeManagedSettings({
+      profiles: [
+        {
+          id: defaultProfileId,
+          name: 'old name',
+          provider: 'openai',
+          baseUrl: 'https://attacker.example/v1',
+          apiKey: 'should-not-survive',
+          model: 'old-model',
+          timeout: 300,
+          apiMode: 'responses',
+          codexCli: true,
+          apiProxy: false,
+        },
+        {
+          id: 'custom-openai',
+          name: 'Other provider',
+          provider: 'openai',
+          baseUrl: 'https://other.example/v1',
+          apiKey: 'other-key',
+          model: 'other-image-model',
+          timeout: 300,
+          apiMode: 'images',
+          codexCli: false,
+          apiProxy: true,
+        },
+      ],
+      activeProfileId: 'custom-openai',
+    })
+
+    expect(settings.profiles).toHaveLength(2)
+    expect(settings.profiles[0]).toMatchObject({
+      id: defaultProfileId,
+      name: '本站默认',
+      apiKey: '',
+      model: 'gpt-image-2',
+      apiMode: 'images',
+      apiProxy: true,
+    })
+    expect(settings.profiles[1]).toMatchObject({
+      id: 'custom-openai',
+      baseUrl: 'https://other.example/v1',
+      apiKey: 'other-key',
+      apiProxy: false,
+    })
+    expect(validateManagedProfile(settings.profiles[0])).toBeNull()
+    expect(validateManagedProfile({ ...settings.profiles[1], apiKey: '' })).toBe('缺少 API Key')
+    expect(validateManagedProfile({ ...settings.profiles[1], baseUrl: '' })).toBe('缺少 API URL')
+  })
+
+  it('keeps Agent profiles on the site default instead of the active custom profile', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_SHOW_DEFAULT_CONFIG_ONLY', 'true')
+    vi.stubEnv('VITE_DEFAULT_API_URL', 'https://site.example/v1')
+    vi.stubEnv('VITE_API_PROXY_AVAILABLE', 'true')
+
+    const {
+      DEFAULT_OPENAI_PROFILE_ID: defaultProfileId,
+      getAgentImageApiProfile: getManagedImageProfile,
+      getAgentTextApiProfile: getManagedTextProfile,
+      normalizeSettings: normalizeManagedSettings,
+    } = await import('./apiProfiles')
+    const settings = normalizeManagedSettings({
+      agentTextModel: 'gpt-5.5',
+      profiles: [{
+        id: 'custom-openai',
+        name: 'Other provider',
+        provider: 'openai',
+        baseUrl: 'https://other.example/v1',
+        apiKey: 'other-key',
+        model: 'other-image-model',
+        timeout: 300,
+        apiMode: 'images',
+        codexCli: false,
+        apiProxy: false,
+      }],
+      activeProfileId: 'custom-openai',
+    })
+
+    expect(getManagedImageProfile(settings)).toMatchObject({
+      id: defaultProfileId,
+      apiKey: '',
+      apiProxy: true,
+    })
+    expect(getManagedTextProfile(settings)).toMatchObject({
+      name: '本站 NewAPI Agent',
+      apiKey: '',
+      apiProxy: true,
+      model: 'gpt-5.5',
+      apiMode: 'responses',
+    })
+  })
+})
+
 describe('default API URL env', () => {
   it('applies shared URL params from VITE_DEFAULT_API_URL to the default profile', async () => {
     vi.resetModules()
